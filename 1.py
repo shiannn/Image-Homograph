@@ -41,7 +41,35 @@ def get_sift_correspondences(img1, img2):
     #cv2.destroyAllWindows() 
     return points1, points2
 
-def homography_estimation(points1, points2, k=4):
+def normalized(points):
+    mean, std = points.mean(axis=0), points.std()
+    inv_transform = np.array([
+        [std/np.sqrt(2), 0, mean[0]],
+        [0, std/np.sqrt(2), mean[1]],
+        [0, 0, 1]
+    ])
+    transform = np.linalg.inv(inv_transform)
+    homo_points = to_homogeneous(points)
+    normalized_points = np.matmul(transform, homo_points.T)
+    normalized_points = normalized_points.T[:,:2]
+    
+    return normalized_points, transform, inv_transform
+
+def normalized_DLT(points1, points2, k=4):
+    normalized_points1, transform1, _ = normalized(points1)
+    normalized_points2, _, inv_transform2 = normalized(points2)
+    #print(normalized_points1)
+    H = DLT(
+        normalized_points1,
+        normalized_points2, k=k
+    )
+    H2 = np.matmul(
+        inv_transform2,
+        np.matmul(H, transform1)
+    )
+    return H2
+
+def DLT(points1, points2, k=4):
     points1, points2 =points1[:k], points2[:k]
     def build_matrix(points1, points2):
         A = np.zeros((2*points1.shape[0], 9))
@@ -83,23 +111,27 @@ if __name__ == '__main__':
     img1 = cv.imread(sys.argv[1])
     img2 = cv.imread(sys.argv[2])
     gt_correspondences = np.load(sys.argv[3])
+    if sys.argv[4] == 'norm':
+        norm = True
+    else:
+        norm = False
     
     points1, points2 = get_sift_correspondences(img1, img2)
-    
-    for k_sample in [4,8,20,1000]:
-        H = homography_estimation(points1, points2, k=k_sample)
+
+    for k_sample in [4,8,20]:
+        if norm:
+            H = normalized_DLT(points1, points2, k=k_sample)
+        else:
+            H = DLT(points1, points2, k=k_sample)
+
         ps = to_homogeneous(gt_correspondences[0])
         pt = to_homogeneous(gt_correspondences[1])
-        #print(ps.shape)
-        #pt = gt_correspondences[1]
-        Hps = np.matmul(H, ps.T)
-        Hps = Hps.T / Hps.T[:,2:]
-        #print(Hps.T)
-        #print(Hps.T / Hps.T[:,2:])
+        Hps = np.matmul(H, ps.T).T
+        Hps = Hps / Hps[:,2:]
+
         print(np.sqrt(((Hps - pt)**2).sum(axis=1)).mean(axis=0))
         rows, cols, chs = img1.shape
         recons = cv.warpPerspective(img1, H, dsize=(img1.shape[1], img1.shape[0]))
-        print(recons.shape)
 
         fig = plt.figure(figsize=(15,15))
         ax = fig.add_subplot(121)
