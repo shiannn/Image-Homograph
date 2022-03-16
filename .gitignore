@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# notebook
+*.ipynb
+hw1_3dcv
