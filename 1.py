@@ -1,7 +1,8 @@
 import sys
 import numpy as np
 import cv2 as cv
-import matplotlib.pyplot as plt
+from utils import normalized, to_homogeneous, vis_img
+from DirectLT import normalized_DLT, DLT
 
 def get_sift_correspondences(img1, img2):
     '''
@@ -29,83 +30,9 @@ def get_sift_correspondences(img1, img2):
     points1 = np.array([kp1[m.queryIdx].pt for m in good_matches])
     points2 = np.array([kp2[m.trainIdx].pt for m in good_matches])
     
-    good_matches = good_matches[:5]
-    img_draw_match = cv.drawMatches(img1, kp1, img2, kp2, good_matches, None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    #print(img_draw_match)
-    fig = plt.figure(figsize=(15,15))
-    ax = fig.add_subplot(111)
-    ax.imshow(img_draw_match)
-    plt.show()
-    #cv.imshow('match', img_draw_match)
-    #cv.waitKey(0)
-    #cv2.destroyAllWindows() 
-    return points1, points2
-
-def normalized(points):
-    mean, std = points.mean(axis=0), points.std()
-    inv_transform = np.array([
-        [std/np.sqrt(2), 0, mean[0]],
-        [0, std/np.sqrt(2), mean[1]],
-        [0, 0, 1]
-    ])
-    transform = np.linalg.inv(inv_transform)
-    homo_points = to_homogeneous(points)
-    normalized_points = np.matmul(transform, homo_points.T)
-    normalized_points = normalized_points.T[:,:2]
+    img_draw_match = cv.drawMatches(img1, kp1, img2, kp2, good_matches[:50], None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     
-    return normalized_points, transform, inv_transform
-
-def normalized_DLT(points1, points2, k=4):
-    normalized_points1, transform1, _ = normalized(points1)
-    normalized_points2, _, inv_transform2 = normalized(points2)
-    #print(normalized_points1)
-    H = DLT(
-        normalized_points1,
-        normalized_points2, k=k
-    )
-    H2 = np.matmul(
-        inv_transform2,
-        np.matmul(H, transform1)
-    )
-    return H2
-
-def DLT(points1, points2, k=4):
-    points1, points2 =points1[:k], points2[:k]
-    def build_matrix(points1, points2):
-        A = np.zeros((2*points1.shape[0], 9))
-        for idx, (p1, p2) in enumerate(zip(points1, points2)):
-            u1, v1 = p1
-            u2, v2 = p2
-            row1 = np.array([0,0,0,-u1,-v1,-1,v2*u1, v2*v1, v2])
-            row2 = np.array([u1, v1, 1, 0,0,0, -u2*u1, -u2*v1, -u2])
-            A[2*idx] = row1
-            A[2*idx+1] = row2
-        return A
-    def solve_rayleigh(A):
-        eigval, eigvec = np.linalg.eig(np.matmul(A.T, A))
-        idx = eigval.real.argsort()[::-1]   
-        eigval = eigval[idx]
-        eigvec = eigvec[idx]
-        #print(eigval)
-        #print(eigvec)
-        return eigvec[-1]
-    
-    def solve_rayleigh_svd(A):
-        u, s, v = np.linalg.svd(A)
-        #print(v[-1])
-        return v[-1]
-        
-    A = build_matrix(points1, points2)
-    h = solve_rayleigh_svd(A)
-    res = np.matmul(A, h).mean()
-    assert res < 1e-4
-    H = h.reshape(3,3)
-    #print(H)
-    return H
-
-def to_homogeneous(points_uv):
-    homo_points = np.concatenate([points_uv, np.ones((points_uv.shape[0], 1))], axis=1)
-    return homo_points
+    return points1, points2, img_draw_match
 
 if __name__ == '__main__':
     img1 = cv.imread(sys.argv[1])
@@ -116,7 +43,9 @@ if __name__ == '__main__':
     else:
         norm = False
     
-    points1, points2 = get_sift_correspondences(img1, img2)
+    points1, points2, img_draw_match = get_sift_correspondences(img1, img2)
+
+    vis_img(cv.cvtColor(img_draw_match,cv.COLOR_BGR2RGB))
 
     for k_sample in [4,8,20]:
         if norm:
@@ -132,10 +61,8 @@ if __name__ == '__main__':
         print(np.sqrt(((Hps - pt)**2).sum(axis=1)).mean(axis=0))
         rows, cols, chs = img1.shape
         recons = cv.warpPerspective(img1, H, dsize=(img1.shape[1], img1.shape[0]))
-
-        fig = plt.figure(figsize=(15,15))
-        ax = fig.add_subplot(121)
-        ax.imshow(recons)
-        ax = fig.add_subplot(122)
-        ax.imshow(img2)
-        plt.show()
+        
+        vis_img(
+            cv.cvtColor(
+            np.concatenate([recons, img2], axis=1),cv.COLOR_BGR2RGB)
+        )
