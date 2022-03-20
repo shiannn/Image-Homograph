@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 from DirectLT import normalized_DLT
 from utils import vis_img
+import time
 
 def argparse2():
     parser = argparse.ArgumentParser()
@@ -13,6 +14,14 @@ def argparse2():
     parser.add_argument(
         "-o", "--output_img", type=str,
         help="output document image after rectification"
+    )
+    parser.add_argument(
+        "-m", "--method_interplate", choices=['bilinear', 'nearest', 'bicubic'],
+        help="method for interplation"
+    )
+    parser.add_argument(
+        "-v", "--visualize", action='store_true',
+        help="whether visualize"
     )
     args = parser.parse_args()
     
@@ -95,9 +104,11 @@ def bilinear_interpolate(img, H, target_size=None):
 
 def main(args):
     img = cv2.imread(args.input_img)
-    img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    st = time.time()
+    #img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
     print(img.shape)
-    points1 = np.array([[201,222], [625,55], [480,700], [950, 480]])
+    #points1 = np.array([[201,222], [625,55], [480,700], [950, 480]])
+    points1 = np.array([[112,51], [292, 77], [20,270], [235,344]])
     up = points1[:,1].min()
     down = points1[:,1].max()
     left = points1[:,0].min()
@@ -108,17 +119,24 @@ def main(args):
     for point in points2:
         u,v = point
         show_img = cv2.circle(show_img, (u,v), radius=5, color=(0, 0, 255), thickness=-1)
-    vis_img(show_img)
+    if args.visualize:
+        vis_img(cv2.cvtColor(show_img,cv2.COLOR_BGR2RGB))
     H = normalized_DLT(points1, points2, k=points1.shape[0])
-    recons = bilinear_interpolate(img, H, target_size=None)
-    #recons = nearest_interpolate(img, H, target_size=None)
-    #recons = cv2.warpPerspective(
-    #    img, H, dsize=(img.shape[1], img.shape[0]),
-    #    flags=cv2.INTER_CUBIC
-    #)
-    print(recons.shape)
-    #vis_img(recons)
-    vis_img(recons.astype(int))
+    if args.method_interplate == 'bilinear':
+        recons = bilinear_interpolate(img, H, target_size=None)
+    elif args.method_interplate == 'nearest':
+        recons = nearest_interpolate(img, H, target_size=None)
+    elif args.method_interplate == 'bicubic':
+        recons = cv2.warpPerspective(
+            img, H, dsize=(img.shape[1], img.shape[0]),
+            flags=cv2.INTER_CUBIC
+        )
+    ed = time.time()
+    print(ed-st)
+    if args.visualize:
+        vis_img(cv2.cvtColor(recons.astype(np.uint8),cv2.COLOR_BGR2RGB))
+    if args.output_img:
+        cv2.imwrite(args.output_img, recons)
 if __name__ == '__main__':
     args = argparse2()
     main(args)

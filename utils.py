@@ -2,7 +2,7 @@ import numpy as np
 
 def vis_img(img):
     import matplotlib.pyplot as plt
-    fig = plt.figure(figsize=(15,15))
+    fig = plt.figure()
     ax = fig.add_subplot(111)
     ax.imshow(img)
     plt.show()
