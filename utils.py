@@ -1,8 +1,8 @@
 import numpy as np
 
-def vis_img(img):
+def vis_img(img, size=(10,10)):
     import matplotlib.pyplot as plt
-    fig = plt.figure()
+    fig = plt.figure(figsize=size)
     ax = fig.add_subplot(111)
     ax.imshow(img)
     plt.show()
